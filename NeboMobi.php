@@ -9,7 +9,9 @@ include_once CURRENT_DIR . 'library/simple_html_dom.php';
 define('URL_PURCHASE_GOODS', 'http://nebo.mobi/floors/0/2/');
 define('URL_LAY_OUT_ITEMS', 'http://nebo.mobi/floors/0/3/');
 define('URL_GATHER_EARNINGS', 'http://nebo.mobi/floors/0/5/');
-define('URL_LIFT' , 'http://nebo.mobi/lift/');
+define('URL_LIFT', 'http://nebo.mobi/lift/');
+define('URL_MAIN', 'http://nebo.mobi/home');
+define('URL_QUESTS' , 'http://nebo.mobi/quests');
 
 class NeboMobi {
     protected $login;
@@ -258,13 +260,89 @@ class NeboMobi {
         }
     }
 
+    public function evictResidents()
+    {
+        $i = 0;
+        if ($urlHotel = $this->_getUrlHotel()){
+            $hotelPageContent = $this->sendGetRequest($this->host . $urlHotel);
+            $html = str_get_html($hotelPageContent);
+            if ($residents = $html->find('div.main ul.rsd li')){
+                foreach($residents as $resident){
+                    if ($resident->find('.minor')[0]->innertext == 'Свободное место'){
+                        return $i;
+                    }
+                    if (!count($resident->find('.amount')) && $resident->find('.minor')[0]->innertext != 'Свободное место' && $resident->find('.abstr span')[0]->innertext != '9'){
+                        $urlEvictNode = $resident->find('a');
+                        if (isset($urlEvictNode[0])){
+                            if ($urlEvict = $urlEvictNode[0]->href){
+                                $urlEvict = str_replace('../../', "", $urlEvict);
+                                $residentContent = $this->sendGetRequest($this->host . $urlEvict);
+                                $htmlResident = str_get_html($residentContent);
+                                if(isset($htmlResident->find('.btnr')[0])){
+                                    $urlOut = $htmlResident->find('.btnr')[0]->href;
+                                    $urlOut = str_replace('../../', "", $urlOut);
+                                    $pageOutContent = $this->sendGetRequest($this->host . $urlOut);
+                                    $i++;
+                                }
+                                unset ($http_response_header);
+                            }
+                        }
+                    }
+                }
+            }
+            unset($html);
+        }
 
+        return $i;
+    }
+
+    private function _getUrlHotel()
+    {
+        $result = false;
+        $contentMainPage = $this->sendGetRequest(URL_MAIN);
+        $html = str_get_html($contentMainPage);
+        if ($urls = $html->find('div.rs a')) {
+            foreach($urls as $url){
+                if ( preg_match('/Гостиница/', $url->innertext )){
+                    $result = $url->href;
+                }
+            }
+        }
+
+        unset($html);
+        unset($urls);
+
+        return $result;
+    }
+
+public function getherPrisents()
+{
+    $pageQuests = $this->sendGetRequest(URL_QUESTS);
+    $html = str_get_html($pageQuests);
+    $i = 0;
+    if ($prisents = $html->find('.btn60')){
+        foreach($prisents as $prisent){
+            $i++;
+            $this->sendGetRequest(URL_QUESTS . $prisent->href);
+        }
+    }
+    unset($html);
+
+    return $i;
+}
 
 }
 
 $neboMoby = new NeboMobi(SITE_LOGIN, SITE_PASSWORD);
 $neboMoby->authorize();
 
+//Собрать награду
+$getherPrisents = $neboMoby->getherPrisents();
+echo '\'' . $getherPrisents . "' gethered prisents" . PHP_EOL;
+// Выселить людей с рейтингом меньше 9
+// невыселятся с позначкой "(+)"
+$evictedResidents = $neboMoby->evictResidents();
+echo '\'' . $evictedResidents . "' evicted residents" . PHP_EOL;
 //Собрать выручку!
 $countGatherEarnings = $neboMoby->gatherEarnings();
 echo '\'' . $countGatherEarnings . "' gathered earnings" . PHP_EOL;
